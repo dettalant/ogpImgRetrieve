@@ -66,22 +66,23 @@ const imgSrcOverwrite = (url: string, el: HTMLImageElement | null, isUseLazysize
 }
 
 /**
- * 入力したページに接続して次なる処理へとつなげる
+ * 入力したページに接続して、取得できたraw html stringをコールバック関数へとつなげる
  * ブラウザがfetch apiに対応してるならfetchを用いて、対応していなければXMLHTTPRequestを用いる
- * @param  args ogpImgRetrieve.run()にて入力されたオブジェクト
+ *
+ * fetchフォールバック部分だけ別利用できるようにこれもexportしておく
+ *
+ * @param  url      接続するurl
+ * @param  callback 接続成功後に呼び出すコールバック関数。第一引数に取得したhtmlを入れる。
  */
-const fetchUrl = (args: InitArgs) => {
+export const fetchHTML = (url: string, callback: Function) => {
   if (isFetchAPISupported()) {
     // fecth api
-    fetch(args.url)
+    fetch(url)
       .then((res) => {
         return res.text();
       })
       .then((text) => {
-        return parseOGPImage(text);
-      })
-      .then((url) => {
-        imgSrcOverwrite(url, args.imgEl, args.isUseLazysizes);
+        callback(text);
       })
   } else {
     // xml http request
@@ -89,11 +90,10 @@ const fetchUrl = (args: InitArgs) => {
     xhr.onreadystatechange = function() {
       if (xhr.readyState === 4 && xhr.status === 200) {
         // 接続成功時
-        const linkImgUrl = parseOGPImage(xhr.responseText);
-        imgSrcOverwrite(linkImgUrl, args.imgEl, args.isUseLazysizes);
+        callback(xhr.responseText)
       }
     }
-    xhr.open("GET", args.url, true);
+    xhr.open("GET", url, true);
 
     // 接続開始
     xhr.send();
@@ -102,14 +102,23 @@ const fetchUrl = (args: InitArgs) => {
 
 export const run = (args: InitArgs) => {
   // 初期化時例外処理
-  if (typeof args === "undefined") {
+  if (args === void 0) {
     console.error("ogpImgRetrieveError: run()関数には引数となるオブジェクトが必要です");
-  } else if (typeof args.imgEl === "undefined") {
+  } else if (args.imgEl === void 0 || args.imgEl === null) {
     console.error("ogpImgRetrieveError: run()関数の引数オブジェクトにimgElが存在しない")
-  } else if (typeof args.url === "undefined") {
+  } else if (args.url === void 0) {
     console.error("ogpImgRetrieveError: run()関数の引数オブジェクトにurlが存在しない");
   }
 
+  /**
+   * ogp imageをparseして、それでimgSrcを上書きする関数
+   * @param  str  fetchで取得したhtmlのraw text
+   */
+  const parseAndOverwrite = (str: string) => {
+    const linkImgUrl = parseOGPImage(str);
+    imgSrcOverwrite(linkImgUrl, args.imgEl, args.isUseLazysizes);
+  }
+
   // 小さなスクリプトなので手続き型で処理
-  fetchUrl(args)
+  fetchHTML(args.url, parseAndOverwrite)
 }
